@@ -26,6 +26,12 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
+      - name: debug
+        run: |
+          echo "repo=${{ github.repository }}"
+          echo "event=${{ github.event_name }}"
+          echo "account_set=${{ secrets.AWS_ACCOUNT_ID != '' }}"
+
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/relay-gha-plan
