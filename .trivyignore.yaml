@@ -1,0 +1,9 @@
+misconfigurations:
+  - id: AWS-0089
+    paths:
+      - "bootstrap/state.tf"
+    statement: >
+      Access logging omitted; requires a second bucket with its own cost
+      and its own logging question. CloudTrail S3 data events are the
+      appropriate audit mechanism here.
+    expired_at: 2027-03-01
