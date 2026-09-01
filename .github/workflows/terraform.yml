@@ -32,6 +32,12 @@ jobs:
           echo "event=${{ github.event_name }}"
           echo "account_set=${{ secrets.AWS_ACCOUNT_ID != '' }}"
 
+      - name: dump OIDC claims
+        run: |
+          TOKEN=$(curl -sH "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
+          echo "$TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | jq '{sub,aud,repository,repository_owner,ref,event_name}'
+
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/relay-gha-plan
