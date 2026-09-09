@@ -1,0 +1,97 @@
+name: terraform
+
+on:
+  pull_request:
+    paths: ['terraform/**', '.github/workflows/terraform.yml']
+  push:
+    branches: [main]
+    paths: ['terraform/**', '.github/workflows/terraform.yml']
+
+permissions:
+  contents: read
+  id-token: write        # required for OIDC
+  pull-requests: write
+
+env:
+  TF_VERSION: "1.16.0"   # match your local `terraform version`
+  AWS_REGION: us-east-2
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: debug
+        run: |
+          echo "repo=${{ github.repository }}"
+          echo "event=${{ github.event_name }}"
+          echo "account_set=${{ secrets.AWS_ACCOUNT_ID != '' }}"
+
+      - name: dump OIDC claims
+        run: |
+          TOKEN=$(curl -sH "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
+          echo "$TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | jq '{sub,aud,repository,repository_owner,ref,event_name}'
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/relay-gha-plan
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: fmt
+        run: terraform fmt -check -recursive
+
+      - name: init
+        working-directory: terraform
+        run: terraform init
+
+      - name: validate
+        working-directory: terraform
+        run: terraform validate
+
+      - uses: terraform-linters/setup-tflint@v4
+      - name: tflint
+        working-directory: terraform
+        run: tflint --init && tflint
+
+      - name: trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: config
+          scan-ref: terraform
+          exit-code: '1'
+          severity: 'HIGH,CRITICAL'
+
+      - name: plan
+        working-directory: terraform
+        run: terraform plan -no-color -input=false
+
+  apply:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: plan
+    runs-on: ubuntu-latest
+    environment: production        # this line gates the apply role
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/relay-gha-apply
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: init
+        working-directory: terraform
+        run: terraform init
+
+      - name: apply
+        working-directory: terraform
+        run: terraform apply -auto-approve -input=false
