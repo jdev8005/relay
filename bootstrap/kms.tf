@@ -1,8 +1,12 @@
 resource "aws_kms_key" "state" {
   description             = "Relay Terraform state encryption"
   enable_key_rotation     = true
-  deletion_window_in_days = 7
+  deletion_window_in_days = 30
   policy                  = data.aws_iam_policy_document.state_key.json
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_kms_alias" "state" {

@@ -17,6 +17,58 @@ env:
   AWS_REGION: us-east-2
 
 jobs:
+  tests:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: relay_test
+          MYSQL_ROOT_PASSWORD: secret
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -psecret"
+          --health-interval=5s --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql, pdo_sqlite, redis, bcmath, pcntl, zip
+          coverage: none
+
+      - working-directory: app
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - working-directory: app
+        run: cp .env.example .env && php artisan key:generate
+
+      - working-directory: app
+        run: php artisan migrate --force
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: relay_test
+          DB_USERNAME: root
+          DB_PASSWORD: secret
+
+      - working-directory: app
+        run: php artisan test
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: relay_test
+          DB_USERNAME: root
+          DB_PASSWORD: secret
+          REDIS_HOST: 127.0.0.1
+          WEBHOOK_SECRET_ACME: ci-test-secret
+
   plan:
     runs-on: ubuntu-latest
     steps:
@@ -25,18 +77,6 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
-
-      - name: debug
-        run: |
-          echo "repo=${{ github.repository }}"
-          echo "event=${{ github.event_name }}"
-          echo "account_set=${{ secrets.AWS_ACCOUNT_ID != '' }}"
-
-      - name: dump OIDC claims
-        run: |
-          TOKEN=$(curl -sH "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
-          echo "$TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | jq '{sub,aud,repository,repository_owner,ref,event_name}'
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
