@@ -73,11 +73,34 @@ AWS stopped validating thumbprints for GitHub's OIDC endpoint in 2023 and
 validates against the endpoint's root CA instead, but the Terraform provider still
 requires the argument to be present.
 
-Trust policy conditions are **case-sensitive string matches**. The `sub` claim
-carries GitHub's canonical casing for the repository owner, which may differ from
-what is typed into `terraform.tfvars`. A mismatch produces
-`Not authorized to perform sts:AssumeRoleWithWebIdentity` with no indication of
-which claim failed — every component appears correct when inspected individually.
+### The `sub` claim format is not fixed
+
+The trust policy initially matched `repo:OWNER/REPO:*`, the format shown in
+essentially all published examples. Every component verified correct in
+isolation — provider URL, client ID list, role ARN, region, `id-token: write`
+permission, account ID secret — and `sts:AssumeRoleWithWebIdentity` still
+returned `Not authorized`.
+
+Decoding the actual token revealed why:
+
+    "sub": "repo:jdev8005@233085440/relay@1349205329:pull_request"
+
+The repository has immutable IDs enabled, which embeds the numeric owner ID and
+repository ID into the `sub` claim. Names can be transferred, deleted, and
+re-registered by someone else; numeric IDs cannot. Pinning trust to the numeric
+form removes a class of attack where a policy referencing a relinquished
+username is later satisfied by a different account.
+
+The trust conditions were updated to construct the subject from both name and ID:
+
+    repo:${owner}@${owner_id}/${repo}@${repo_id}
+
+The failure mode is worth recording: the error is identical whether the OIDC
+provider, the audience, the role ARN, the account ID, or the subject is wrong.
+Inspecting each component individually cannot distinguish them, because each one
+is individually correct. The only diagnostic that resolves it is decoding the
+token GitHub actually sent, by requesting it from
+`ACTIONS_ID_TOKEN_REQUEST_URL` and base64-decoding the payload segment.
 
 The workflow requires `id-token: write` in its `permissions` block. Without it,
 no OIDC token is minted and the credentials step fails for an unrelated-looking
@@ -111,3 +134,8 @@ access to the state bucket and its KMS key; see ADR-0005 for the key policy.
   `pull_request_target` and fork events explicitly.
 - `PowerUserAccess` on the apply role is broad. Narrowing it to the specific
   services Relay uses is deferred until the resource set stabilizes.
+- The trust policy hard-codes numeric owner and repository IDs. Recreating the
+  repository under the same name produces a new repository ID and breaks
+  authentication until the policy is updated. This is the intended trade-off —
+  a name-based policy would keep working, which is exactly the property that
+  makes it weaker.
