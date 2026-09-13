@@ -1,5 +1,7 @@
 locals {
-  repo_sub = "repo:${var.github_owner}/${var.github_repo}"
+  github_owner_id = "233085440"
+  github_repo_id  = "1349205329"
+  repo_sub        = "repo:${var.github_owner}@${local.github_owner_id}/${var.github_repo}@${local.github_repo_id}"
 }
 
 # ---------- PLAN role: read-only, any branch or PR ----------

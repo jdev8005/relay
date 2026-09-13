@@ -16,7 +16,7 @@ variable "github_repo" {
 
 variable "budget_limit_usd" {
   type    = string
-  default = "0.01"
+  default = "25"
 }
 
 variable "alert_email" {
