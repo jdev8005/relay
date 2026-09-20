@@ -109,6 +109,15 @@ reason.
 `terraform` and `bootstrap` are separate configurations. Both CI roles are granted
 access to the state bucket and its KMS key; see ADR-0005 for the key policy.
 
+### Two OIDC failure modes that could get confused
+Could not load credentials from any providers means GitHub never minted a
+token — the job is missing id-token: write in its permissions block. This
+is a GitHub-side configuration problem; AWS was never contacted.
+
+Not authorized to perform sts:AssumeRoleWithWebIdentity means a token was
+issued and AWS rejected it — a trust policy mismatch on the sub or aud
+claim. This is an AWS-side problem.
+
 ## Consequences
 
 **Positive**
