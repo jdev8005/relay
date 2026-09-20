@@ -185,3 +185,74 @@ resource "aws_iam_role_policy" "apply_state" {
   role   = aws_iam_role.gha_apply.id
   policy = data.aws_iam_policy_document.state_access.json
 }
+
+# ---------- BUILD role: ECR push only, main branch ----------
+
+data "aws_iam_policy_document" "build_assume" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    # Main branch only. No environment gate — building is not deploying.
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = ["${local.repo_sub}:ref:refs/heads/main"]
+    }
+  }
+}
+
+resource "aws_iam_role" "gha_build" {
+  name                 = "relay-gha-build"
+  assume_role_policy   = data.aws_iam_policy_document.build_assume.json
+  max_session_duration = 3600
+}
+
+data "aws_iam_policy_document" "build_ecr" {
+  statement {
+    effect    = "Allow"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:CompleteLayerUpload",
+      "ecr:InitiateLayerUpload",
+      "ecr:PutImage",
+      "ecr:UploadLayerPart",
+      "ecr:BatchGetImage",
+      "ecr:GetDownloadUrlForLayer",
+    ]
+    resources = [aws_ecr_repository.app.arn]
+  }
+
+  statement {
+    effect    = "Allow"
+    actions   = ["kms:Decrypt", "kms:GenerateDataKey", "kms:DescribeKey"]
+    resources = [aws_kms_key.state.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "build_ecr" {
+  name   = "relay-ecr-push"
+  role   = aws_iam_role.gha_build.id
+  policy = data.aws_iam_policy_document.build_ecr.json
+}
+
+output "gha_build_role_arn" {
+  value = aws_iam_role.gha_build.arn
+}

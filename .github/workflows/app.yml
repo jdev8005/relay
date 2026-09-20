@@ -1,0 +1,118 @@
+name: app
+
+on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'docker/**'
+      - '.github/workflows/app.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'docker/**'
+      - '.github/workflows/app.yml'
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-2
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: relay_test
+          MYSQL_ROOT_PASSWORD: secret
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -psecret"
+          --health-interval=5s --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql, pdo_sqlite, redis, bcmath, pcntl, zip
+          coverage: none
+
+      - working-directory: app
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - working-directory: app
+        run: cp .env.example .env && php artisan key:generate
+
+      - working-directory: app
+        run: php artisan migrate --force
+        env: &db
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: relay_test
+          DB_USERNAME: root
+          DB_PASSWORD: secret
+
+      - working-directory: app
+        run: php artisan test
+        env:
+          <<: *db
+          REDIS_HOST: 127.0.0.1
+          WEBHOOK_SECRET_ACME: ci-test-secret
+
+  build:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/relay-gha-build
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/php/Dockerfile
+          target: prod
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.ecr.outputs.registry }}/relay-app:sha-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  gate:
+    name: app-gate
+    if: always()
+    needs: [tests, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: check results
+        run: |
+          echo '${{ toJSON(needs) }}'
+          if echo '${{ toJSON(needs) }}' | grep -q '"result": *"failure"'; then
+            echo "A required job failed."
+            exit 1
+          fi
+          if echo '${{ toJSON(needs) }}' | grep -q '"result": *"cancelled"'; then
+            echo "A required job was cancelled."
+            exit 1
+          fi
+          echo "All required jobs passed or were skipped."
