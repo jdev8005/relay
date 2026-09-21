@@ -22,6 +22,15 @@ env:
 jobs:
   tests:
     runs-on: ubuntu-latest
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: relay_test
+      DB_USERNAME: root
+      DB_PASSWORD: secret
+      REDIS_HOST: 127.0.0.1
+      WEBHOOK_SECRET_ACME: ci-test-secret
     services:
       mysql:
         image: mysql:8.4
@@ -47,25 +56,18 @@ jobs:
       - working-directory: app
         run: composer install --prefer-dist --no-interaction --no-progress
 
+      - name: audit dependencies
+        working-directory: app
+        run: composer audit --locked --format=plain
+
       - working-directory: app
         run: cp .env.example .env && php artisan key:generate
 
       - working-directory: app
         run: php artisan migrate --force
-        env: &db
-          DB_CONNECTION: mysql
-          DB_HOST: 127.0.0.1
-          DB_PORT: 3306
-          DB_DATABASE: relay_test
-          DB_USERNAME: root
-          DB_PASSWORD: secret
 
       - working-directory: app
         run: php artisan test
-        env:
-          <<: *db
-          REDIS_HOST: 127.0.0.1
-          WEBHOOK_SECRET_ACME: ci-test-secret
 
   build:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
