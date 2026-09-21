@@ -6,6 +6,10 @@ repos:
       - id: terraform_validate
       - id: terraform_tflint
       - id: terraform_trivy
+        args:
+          - --args=--skip-dirs=app/vendor
+          - --args=--ignorefile=__GIT_WORKING_DIR__/.trivyignore.yaml
+          - --args=--severity=HIGH,CRITICAL
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
