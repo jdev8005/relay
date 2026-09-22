@@ -7,3 +7,10 @@ misconfigurations:
       and its own logging question. CloudTrail S3 data events are the
       appropriate audit mechanism here.
     expired_at: 2027-03-01
+  - id: DS-0026
+    paths:
+      - "docker/php/Dockerfile"
+    statement: >
+      Health checks are owned by the ECS task definition and ALB target group,
+      both defined in Week 4. ECS ignores the Dockerfile HEALTHCHECK instruction.
+    expired_at: 2027-03-01
