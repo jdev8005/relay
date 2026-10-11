@@ -2,16 +2,8 @@ name: app
 
 on:
   pull_request:
-    paths:
-      - 'app/**'
-      - 'docker/**'
-      - '.github/workflows/app.yml'
   push:
     branches: [main]
-    paths:
-      - 'app/**'
-      - 'docker/**'
-      - '.github/workflows/app.yml'
 
 permissions:
   contents: read
@@ -20,7 +12,27 @@ env:
   AWS_REGION: us-east-2
 
 jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      app: ${{ steps.filter.outputs.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            app:
+              - 'app/**'
+              - 'docker/**'
+              - '.github/workflows/app.yml'
+
   tests:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-24.04
     env:
       DB_CONNECTION: mysql
@@ -105,7 +117,7 @@ jobs:
   gate:
     name: app-gate
     if: always()
-    needs: [tests, build]
+    needs: [changes, tests, build]
     runs-on: ubuntu-24.04
     steps:
       - name: check results

@@ -2,16 +2,8 @@ name: terraform
 
 on:
   pull_request:
-    paths:
-      - 'terraform/**'
-      - 'bootstrap/**'
-      - '.github/workflows/terraform.yml'
   push:
     branches: [main]
-    paths:
-      - 'terraform/**'
-      - 'bootstrap/**'
-      - '.github/workflows/terraform.yml'
 
 permissions:
   contents: read
@@ -21,7 +13,26 @@ env:
   AWS_REGION: us-east-2
 
 jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      terraform: ${{ steps.filter.outputs.terraform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            terraform:
+              - 'terraform/**'
+              - 'bootstrap/**'
+              - '.github/workflows/terraform.yml'
   plan:
+    needs: changes
+    if: needs.changes.outputs.terraform == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -97,7 +108,7 @@ jobs:
   gate:
     name: terraform-gate
     if: always()
-    needs: [plan, apply]
+    needs: [changes, plan, apply]
     runs-on: ubuntu-24.04
     steps:
       - name: check results
