@@ -35,6 +35,7 @@ data "aws_iam_policy_document" "state_key" {
       identifiers = [
         aws_iam_role.gha_plan.arn,
         aws_iam_role.gha_apply.arn,
+        aws_iam_role.gha_teardown.arn,
       ]
     }
     actions = [
