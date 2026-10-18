@@ -170,6 +170,8 @@ data "aws_iam_policy_document" "apply_iam" {
     resources = [
       aws_iam_role.gha_plan.arn,
       aws_iam_role.gha_apply.arn,
+      aws_iam_role.gha_build.arn,
+      aws_iam_role.gha_teardown.arn,
     ]
   }
 }
@@ -255,4 +257,83 @@ resource "aws_iam_role_policy" "build_ecr" {
 
 output "gha_build_role_arn" {
   value = aws_iam_role.gha_build.arn
+}
+
+# ---------- TEARDOWN role: delete-only, teardown environment only ----------
+
+data "aws_iam_policy_document" "teardown_assume" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    # Exact match. The environment's branch policy is what restricts this to main.
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = ["${local.repo_sub}:environment:teardown"]
+    }
+  }
+}
+
+resource "aws_iam_role" "gha_teardown" {
+  name                 = "relay-gha-teardown"
+  assume_role_policy   = data.aws_iam_policy_document.teardown_assume.json
+  max_session_duration = 3600
+}
+
+# Terraform refreshes every resource before destroying it, so it needs to read.
+resource "aws_iam_role_policy_attachment" "teardown_readonly" {
+  role       = aws_iam_role.gha_teardown.name
+  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
+
+data "aws_iam_policy_document" "teardown_delete" {
+  # One statement per stack layer. Week 4 adds ECS/ALB/logs statements here.
+  statement {
+    sid    = "DeleteNetwork"
+    effect = "Allow"
+    actions = [
+      "ec2:DeleteNatGateway",
+      "ec2:DisassociateAddress",
+      "ec2:ReleaseAddress",
+      "ec2:DisassociateRouteTable",
+      "ec2:DeleteRoute",
+      "ec2:DeleteRouteTable",
+      "ec2:DetachInternetGateway",
+      "ec2:DeleteInternetGateway",
+      "ec2:RevokeSecurityGroupIngress",
+      "ec2:RevokeSecurityGroupEgress",
+      "ec2:DeleteSecurityGroup",
+      "ec2:DeleteSubnet",
+      "ec2:DeleteVpc",
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "teardown_delete" {
+  name   = "relay-teardown-delete"
+  role   = aws_iam_role.gha_teardown.id
+  policy = data.aws_iam_policy_document.teardown_delete.json
+}
+
+resource "aws_iam_role_policy" "teardown_state" {
+  name   = "relay-state-access"
+  role   = aws_iam_role.gha_teardown.id
+  policy = data.aws_iam_policy_document.state_access.json
+}
+
+output "gha_teardown_role_arn" {
+  value = aws_iam_role.gha_teardown.arn
 }
