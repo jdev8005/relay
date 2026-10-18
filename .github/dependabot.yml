@@ -1,0 +1,21 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: composer
+    directory: /app
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /docker        # the directory that contains your Dockerfile
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: terraform
+    directories: ["/bootstrap", "/terraform"]
+    schedule:
+      interval: weekly

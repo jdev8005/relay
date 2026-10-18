@@ -22,7 +22,7 @@ jobs:
       terraform: ${{ steps.filter.outputs.terraform }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad
         id: filter
         with:
           filters: |
