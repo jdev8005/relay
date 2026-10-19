@@ -44,7 +44,7 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/relay-gha-plan
           aws-region: ${{ env.AWS_REGION }}
@@ -92,7 +92,7 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/relay-gha-apply
           aws-region: ${{ env.AWS_REGION }}
