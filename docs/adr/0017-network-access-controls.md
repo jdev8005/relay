@@ -55,10 +55,11 @@ The ingress rule references the ALB's security group rather than a CIDR, so it
 admits traffic from the load balancer's network interfaces and nothing else in
 the VPC.
 
-**4. The accepted finding is suppressed inline, not globally.** The application
-egress rule carries `#trivy:ignore:AWS-0104` directly above the resource, with
-a comment stating why, rather than an entry in a repository-wide
-`.trivyignore` file.
+**4. The accepted finding is suppressed inline, on the one resource.** The
+application security group carries `#trivy:ignore:AWS-0104` directly above
+the resource, with a comment stating why, rather than an entry in
+`.trivyignore.yaml` (see alternatives for why a file-scoped entry is too
+broad here).
 
 ### Alternatives considered
 
@@ -83,9 +84,18 @@ a comment stating why, rather than an entry in a repository-wide
 - **VPC interface endpoints for AWS services, with egress limited to them.**
   This would make restricted egress practical. Rejected on cost in ADR-0013:
   about $29/month against a $25 budget.
-- **A repository-wide `.trivyignore` file.** Rejected: it hides the suppression
-  from anyone reading the resource, applies to every file, and stays silent if
-  the resource it was written for is later deleted.
+- **An entry in `.trivyignore.yaml`.** The repository already uses this file
+  for two suppressions (AWS-0089 on the state bucket, DS-0026 on the
+  Dockerfile), each scoped by path, with a statement and an expiry date.
+  Rejected for this finding because `paths:` scopes by file, not by resource.
+  `security-group.tf` defines both security groups, so a file-level entry
+  would also suppress AWS-0104 on the ALB group, whose egress was deliberately
+  narrowed to pass that check. An inline ignore binds to one block, so the ALB
+  group stays under scan.
+
+  The resulting rule: use `.trivyignore.yaml` when the finding is the only
+  instance in its file, and inline when the file holds both compliant and
+  accepted instances of the same check.
 
 ## Implementation notes
 
@@ -119,8 +129,9 @@ both groups reference each other.
 - The application tier has no inbound path except through the load balancer,
   even from inside the VPC.
 - A resource placed in a public subnet by mistake does not get a public address.
-- The single accepted finding is visible in the code that causes it, with its
-  reason next to it, and shows up in review if it changes.
+- The accepted finding is visible in the code that causes it, with its reason
+  next to it, and shows up in review if it changes. The ALB group in the same
+  file remains fully scanned.
 - Trivy runs clean, so any new finding is a real signal rather than noise.
 
 **Negative**
