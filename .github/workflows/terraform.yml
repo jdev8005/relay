@@ -75,7 +75,7 @@ jobs:
 
       - name: plan
         working-directory: terraform
-        run: terraform plan -no-color -input=false
+        run: terraform plan -no-color -input=false -lock-timeout=10m
 
   apply:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -85,6 +85,9 @@ jobs:
       contents: read
       id-token: write
     environment: production        # this line gates the apply role
+    concurrency:
+      group: relay-prod-state
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
 
@@ -103,7 +106,9 @@ jobs:
 
       - name: apply
         working-directory: terraform
-        run: terraform apply -auto-approve -input=false
+        run: terraform apply -auto-approve -input=false -lock-timeout=10m
+
+
 
   gate:
     name: terraform-gate
