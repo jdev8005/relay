@@ -44,6 +44,16 @@ Statuses are `Proposed`, `Accepted`, `Superseded by ADR-NNNN`, or `Deprecated`.
 | [0011](0011-container-only-php-toolchain.md) | Container-only PHP toolchain | Accepted |
 | [0012](0012-mysql-in-tests-rather-than-sqlite.md) | MySQL in tests rather than SQLite | Accepted |
 
+## Planned
+
+| ADR | Title | Written when |
+|---|---|---|
+| 0018 | Ephemeral environment lifecycle | End of Week 3 |
+| 0019 | PostgreSQL over MySQL for Relay | PostgreSQL switch, before Week 4 |
+| — | Error tracking: Sentry alongside CloudWatch | Sentry phase, after Week 4 |
+| — | Inertia + Vue over Blade / separate SPA | Dashboard phase, after Week 5 |
+| — | Auth model for Relay's dashboard and API | Sanctum phase |
+
 ## Where to start
 
 For the architecture, read **0008** and **0009** — they describe the ingestion
