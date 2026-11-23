@@ -64,6 +64,18 @@ jobs:
         # Exit 0 = no changes, 2 = changes pending, 1 = error. Only 0 passes.
         run: terraform plan -detailed-exitcode -input=false -lock-timeout=10m
 
+      - name: verify expected resources exist
+        # Convergence proves config == AWS. This proves the config isn't empty.
+        run: |
+          nat=$(aws ec2 describe-nat-gateways \
+            --filter Name=state,Values=available \
+            --query 'length(NatGateways)' --output text)
+          echo "NAT gateways available: $nat"
+          if [ "$nat" -lt 1 ]; then
+            echo "::error::up finished but no NAT Gateway exists. Is the configuration complete?"
+            exit 1
+          fi
+
       - name: summary
         run: |
           {
@@ -72,6 +84,18 @@ jobs:
             echo ""
             echo "Tear down when finished: \`gh workflow run lifecycle.yml -f action=down\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: verify expected resources exist
+        # Convergence proves config == AWS. This proves the config isn't empty.
+        run: |
+          nat=$(aws ec2 describe-nat-gateways \
+            --filter Name=state,Values=available \
+            --query 'length(NatGateways)' --output text)
+          echo "NAT gateways available: $nat"
+          if [ "$nat" -lt 1 ]; then
+            echo "::error::up finished but no NAT Gateway exists. Is the configuration complete?"
+            exit 1
+          fi
 
   down:
     if: github.event_name == 'schedule' || inputs.action == 'down'
